@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,14 +18,21 @@ import (
 )
 
 func PublishCommand(args []string) error {
+	publishFlags := flag.NewFlagSet("publish", flag.ExitOnError)
+	serverFile := publishFlags.String("file", "server.json", "Path to server.json (default: ./server.json)")
+	registryURLFlag := publishFlags.String("registry", "", "Registry URL override")
+	dryRun := publishFlags.Bool("dry-run", false, "Validate without publishing")
+	if err := publishFlags.Parse(args); err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
+	}
+
 	// Check for server.json file
-	serverFile := "server.json"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		serverFile = args[0]
+		serverFile = &args[0]
 	}
 
 	// Read server.json
-	serverData, err := os.ReadFile(serverFile)
+	serverData, err := os.ReadFile(*serverFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("server.json not found. Run 'mcp-publisher init' to create one")
@@ -71,8 +79,15 @@ Migrate to the current schema format for new servers.
 
 	token := tokenInfo["token"]
 	registryURL := tokenInfo["registry"]
+	if *registryURLFlag != "" {
+		registryURL = *registryURLFlag
+	}
 	if registryURL == "" {
 		registryURL = DefaultRegistryURL
+	}
+
+	if *dryRun {
+		return nil
 	}
 
 	// Publish to registry
